@@ -1,0 +1,62 @@
+
+INPUT = "covid.fa"
+OUTPUT = "covid"
+K=21
+N=[500,1000,1500,2000,2500]
+
+rule all_summary:
+    input:
+        expand("%s/summary/first{n}.txt"%OUTPUT,n=N)
+
+rule sanitize:
+    input:
+        INPUT
+    output:
+        "%s/sanitized/first{n}.fa"%OUTPUT
+    shell:
+        "python3 ../scripts/sanitize.py {input} --only-first {wildcards.n} > {output}"
+
+rule ggcat:
+    input:
+        "%s/sanitized/first{n}.fa"%OUTPUT
+    output:
+        "%s/ggcat/first{n}.fa"%OUTPUT
+    shell:
+        "ggcat build -k %i -f -s 1 {input} -o {output}"%K
+    
+
+rule degeneratigs_rfh:
+    input:
+        "%s/ggcat/first{n}.fa"%OUTPUT
+    output:
+        "%s/degeneratigs_rfh/first{n}.fa"%OUTPUT
+    shell:
+        "python3 ../scripts/ilp.py {input} {output} -k %i --timelim 30"%K
+
+rule eulertigs:
+    input:
+        "%s/ggcat/first{n}.fa"%OUTPUT
+    output:
+        "%s/eulertigs/first{n}.fa"%OUTPUT
+    shell:
+        "ggcat build --eulertigs -k %i -f -s 1 {input} -o {output}"%K
+
+rule matchtigs:
+    input:
+        "%s/ggcat/first{n}.fa"%OUTPUT
+    output:
+        "%s/matchtigs/first{n}.fa"%OUTPUT
+    shell:
+        "ggcat build --greedy-matchtigs -k %i -f -s 1 {input} -o {output}"%K
+
+
+rule statblock:
+    input:
+        unitigs="%s/ggcat/first{n}.fa"%OUTPUT,
+        eulertigs= "%s/eulertigs/first{n}.fa"%OUTPUT,
+        matchtigs="%s/matchtigs/first{n}.fa"%OUTPUT,
+        degeneratigs_rfh="%s/degeneratigs_rfh/first{n}.fa"%OUTPUT
+    output:
+        "%s/summary/first{n}.txt"%OUTPUT
+    shell:
+        "echo {wildcards.n} $(python3 ../scripts/fasta_stats.py {input.unitigs}) $(python3 ../scripts/fasta_stats.py {input.eulertigs}) $(python3 ../scripts/fasta_stats.py {input.matchtigs}) $(python3 ../scripts/fasta_stats.py {input.degeneratigs_rfh}) > {output}"
